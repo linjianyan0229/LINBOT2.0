@@ -1,0 +1,8 @@
+{
+  "wsUrl": "ws://localhost:8082",
+  "heartbeat": 3000,
+  "background": {
+    "type": "image",
+    "url": "https://t.alcy.cc/ycy"
+  }
+}
