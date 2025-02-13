@@ -26,7 +26,7 @@ class AIChatPlugin {
             'deepseek-chat': 'DeepSeek-V3 通用对话模型',
             'deepseek-reasoner': 'DeepSeek-R1 推理增强模型'
         };
-        this.apiKey = 'sk-ac921f6c00874e91a9118e4c7c048558';
+        this.apiKey = 'sk-';
         this.apiUrl = 'https://api.deepseek.com/v1/chat/completions';
 
         // 初始化 API 客户端

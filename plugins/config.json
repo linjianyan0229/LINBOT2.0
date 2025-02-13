@@ -6,7 +6,10 @@
     "今日运势": true,
     "ai对话": true,
     "重启": true,
-    "关机": true
+    "关机": true,
+    "天气": true,
+    "未来天气": true,
+    "来份涩图": true
   },
   "groupStates": {
     "289621946": true,

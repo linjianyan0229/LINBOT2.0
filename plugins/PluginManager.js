@@ -102,15 +102,17 @@ class PluginManager {
                 continue;
             }
 
-            // 如果是命令匹配
-            if (message.trim() === command) {
+            // 修改为前缀匹配（支持带参数）
+            if (message.trim().startsWith(command + ' ') || message.trim() === command) {
                 // 如果插件被禁用，返回提示信息
                 if (!plugin.enabled) {
                     return `插件 ${command} 已被禁用，请联系管理员启用。`;
                 }
 
                 try {
-                    return await plugin.handle(message, context);
+                    // 传递去除命令后的消息内容
+                    const args = message.trim().slice(command.length).trim();
+                    return await plugin.handle(args, context);
                 } catch (error) {
                     console.error(`插件 ${command} 处理错误:`, error);
                     return `处理命令 ${command} 时出错`;

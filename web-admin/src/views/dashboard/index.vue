@@ -77,7 +77,7 @@ import api from '@/api'
 const isConnected = ref(true)
 const uptime = ref('0分钟')
 const lastHeartbeat = ref('--')
-const startTime = new Date()
+let wsStartTime = null
 
 const pluginStats = ref({
   total: 0,
@@ -91,9 +91,25 @@ const restarting = ref(false)
 
 // 更新在线时长
 const updateUptime = () => {
+  if (!wsStartTime) return
+  
   const now = new Date()
-  const diff = Math.floor((now - startTime) / 1000 / 60)
-  uptime.value = `${diff}分钟`
+  const diffInSeconds = Math.floor((now - wsStartTime) / 1000)
+  
+  const days = Math.floor(diffInSeconds / 86400)
+  const hours = Math.floor((diffInSeconds % 86400) / 3600)
+  const minutes = Math.floor((diffInSeconds % 3600) / 60)
+  
+  let uptimeText = ''
+  if (days > 0) {
+    uptimeText += `${days}天`
+  }
+  if (hours > 0 || days > 0) {
+    uptimeText += `${hours}小时`
+  }
+  uptimeText += `${minutes}分钟`
+  
+  uptime.value = uptimeText
 }
 
 // 定时更新状态
@@ -139,6 +155,7 @@ const confirmRestart = async () => {
     restarting.value = true
     await api.post('/restart')
     ElMessage.success('重启指令已发送')
+    wsStartTime = new Date() // 重启后重置启动时间
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('重启失败')
@@ -151,6 +168,7 @@ const confirmRestart = async () => {
 onMounted(() => {
   getPluginStats()
   getGroupStats()
+  wsStartTime = new Date() // 设置初始启动时间
   
   // 启动定时器
   timer = setInterval(() => {
@@ -167,59 +185,100 @@ onUnmounted(() => {
 })
 </script>
 
+// ... template部分保持不变 ...
+
 <style scoped>
 .dashboard-container {
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: 1400px;
+  margin: 20px auto;
+  padding: 0 20px;
 }
 
+/* 卡片布局优化 */
 .status-card {
-  margin-bottom: 20px;
-  height: 200px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+  background: linear-gradient(145deg, #ffffff, #f8f9fa);
 }
 
+.status-card:hover {
+  transform: translateY(-2px);
+}
+
+/* 状态内容优化 */
 .status-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 120px;
+  min-height: 150px;
+  padding: 20px;
 }
 
 .status-tag {
-  font-size: 16px;
-  padding: 8px 16px;
-  margin-bottom: 16px;
-}
-
-.status-info {
-  text-align: center;
+  font-size: 18px;
+  padding: 10px 24px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-weight: 500;
 }
 
 .status-info p {
-  margin: 8px 0;
-  color: var(--text-secondary);
+  margin: 12px 0;
+  font-size: 14px;
+  color: #6b7280;
 }
 
+/* 统计卡片优化 */
 .count-info {
   text-align: center;
-  margin-bottom: 5px;
+  padding: 20px;
 }
 
 .count-info h3 {
-  font-size: 24px;
-  margin: 0;
-  color: var(--app-primary);
+  font-size: 32px;
+  margin: 16px 0;
+  color: #3b82f6;
+  font-weight: 600;
 }
 
 .count-info p {
-  margin: 4px 0;
-  color: var(--text-secondary);
+  font-size: 16px;
+  color: #6b7280;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+/* 控制面板优化 */
+.dashboard-card {
+  margin-top: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
-</style> 
+
+.section-title {
+  font-size: 20px;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* 按钮样式优化 */
+.el-button--danger {
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+/* 响应式布局 */
+@media (max-width: 1200px) {
+  .el-col {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+  
+  .status-card {
+    margin-bottom: 16px;
+  }
+}
+</style>
