@@ -41,6 +41,7 @@ npm install
 ### 步骤 5️⃣：启动服务
 ```bash
 # 后端服务（终端1）
+npm i -g pm2
 pm2 start ecosystem.config.js
 
 # 前端服务（终端2）
