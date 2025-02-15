@@ -1,21 +1,25 @@
 {
   "pluginStates": {
     "帮助": true,
-    "菜单": true,
     "个人信息": true,
     "今日运势": true,
     "ai对话": true,
     "重启": true,
     "关机": true,
-    "天气": true,
     "未来天气": true,
-    "来份涩图": true
+    "来份涩图": true,
+    "公告": true,
+    "天气": true,
+    "系统信息": true,
+    "菜单": true
   },
   "groupStates": {
     "289621946": true,
     "909475732": false,
     "966693852": false,
     "1015787245": false,
-    "1022448297": true
+    "1022448297": true,
+    "defult": true,
+    "admin": true
   }
 }

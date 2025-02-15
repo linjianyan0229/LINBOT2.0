@@ -41,4 +41,29 @@ export const saveAISettings = (settings) => {
     return api.post('/ai/settings', settings);
 };
 
+// 获取插件代码
+export const getPluginCode = (command) => {
+    return api.get(`/plugins/${encodeURIComponent(command)}/code`);
+};
+
+// 保存插件代码
+export const savePluginCode = (command, code) => {
+    return api.put(`/plugins/${encodeURIComponent(command)}/code`, { code });
+};
+
+// 获取系统运行状态
+export const getSystemStatus = () => {
+    return api.get('/system/status');
+};
+
+// 获取插件分组
+export const getPluginGroups = () => {
+    return api.get('/plugins/groups')
+}
+
+// 更新分组状态
+export const updateGroupState = (groupName, enabled) => {
+    return api.put(`/plugins/groups/${groupName}`, { enabled })
+}
+
 export default api 

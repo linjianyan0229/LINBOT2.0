@@ -1,61 +1,110 @@
 <template>
   <div class="settings-container">
-    <el-card class="settings-card">
-      <template #header>
-        <div class="card-header">
-          <span>系统设置</span>
-        </div>
-      </template>
-      <el-form :model="settings" label-width="120px">
-        <!-- 背景设置 -->
-        <el-form-item label="背景设置">
-          <el-select v-model="settings.background.type" style="width: 100%; margin-bottom: 16px">
-            <el-option label="默认" value="default" />
-            <el-option label="图片" value="image" />
-            <el-option label="视频" value="video" />
-          </el-select>
-          
-          <template v-if="settings.background.type !== 'default'">
-            <el-input
-              v-model="settings.background.url"
-              :placeholder="settings.background.type === 'image' ? '请输入图片URL' : '请输入视频URL'"
-            >
-              <template #append>
-                <el-button @click="previewBackground">预览</el-button>
-              </template>
-            </el-input>
-            
-            <div class="background-preview" v-if="showPreview">
-              <div class="preview-header">
-                <span>背景预览</span>
-                <el-button type="text" @click="showPreview = false">关闭</el-button>
-              </div>
+    <!-- 顶部工具栏 -->
+    <div class="settings-toolbar">
+      <div class="toolbar-left">
+        <h2 class="page-title">系统设置</h2>
+        <el-tag type="success" size="small">基础配置</el-tag>
+      </div>
+      <div class="toolbar-right">
+        <el-button 
+          type="primary" 
+          @click="saveSystemSettings" 
+          :loading="saving"
+        >
+          <el-icon><Check /></el-icon>
+          保存设置
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 设置内容区 -->
+    <div class="settings-scroll">
+      <div class="settings-content">
+        <el-form :model="settings" label-position="top">
+          <!-- WebSocket 设置 -->
+          <div class="setting-section">
+            <div class="section-header">
+              <el-icon><Connection /></el-icon>
+              <h3>连接设置</h3>
+            </div>
+            <el-form-item label="WebSocket 地址">
+              <el-input 
+                v-model="settings.wsUrl" 
+                placeholder="ws://localhost:8082"
+              >
+                <template #prefix>
+                  <el-icon><Link /></el-icon>
+                </template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="心跳间隔">
+              <el-input-number 
+                v-model="settings.heartbeat" 
+                :min="1000" 
+                :step="1000"
+                style="width: 100%"
+              />
+              <div class="form-tip">单位：毫秒（ms），建议值：3000</div>
+            </el-form-item>
+          </div>
+
+          <!-- 背景设置 -->
+          <div class="setting-section">
+            <div class="section-header">
+              <el-icon><Picture /></el-icon>
+              <h3>背景设置</h3>
+            </div>
+            <el-form-item label="背景类型">
+              <el-select 
+                v-model="settings.background.type" 
+                style="width: 100%"
+              >
+                <el-option label="默认" value="default" />
+                <el-option label="图片" value="image" />
+                <el-option label="视频" value="video" />
+              </el-select>
+            </el-form-item>
+
+            <template v-if="settings.background.type !== 'default'">
+              <el-form-item :label="`${settings.background.type === 'image' ? '图片' : '视频'} URL`">
+                <el-input
+                  v-model="settings.background.url"
+                  :placeholder="settings.background.type === 'image' ? '请输入图片URL' : '请输入视频URL'"
+                >
+                  <template #append>
+                    <el-button @click="previewBackground">预览</el-button>
+                  </template>
+                </el-input>
+              </el-form-item>
+            </template>
+          </div>
+
+          <!-- 预览区域 -->
+          <div v-if="showPreview" class="preview-section">
+            <div class="preview-header">
+              <h3>背景预览</h3>
+              <el-button type="text" @click="showPreview = false">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+            <div class="preview-content">
               <img 
                 v-if="settings.background.type === 'image'" 
                 :src="settings.background.url"
                 @error="handlePreviewError"
               >
               <video 
-                v-else 
+                v-else-if="settings.background.type === 'video'"
                 :src="settings.background.url"
                 controls
                 @error="handlePreviewError"
               />
             </div>
-          </template>
-        </el-form-item>
-
-        <el-form-item label="WebSocket地址">
-          <el-input v-model="settings.wsUrl" />
-        </el-form-item>
-        <el-form-item label="心跳间隔(ms)--该功能无效">
-          <el-input-number v-model="settings.heartbeat" :min="1000" :step="1000" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="saveSystemSettings">保存设置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          </div>
+        </el-form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -63,10 +112,14 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSettings, saveSettings } from '@/api/index'
+import { 
+  Check, Connection, Link, Picture, 
+  Close 
+} from '@element-plus/icons-vue'
 
 const settings = ref({
   wsUrl: '',
-  heartbeat: 30000,
+  heartbeat: 3000,
   background: {
     type: 'default',
     url: ''
@@ -74,6 +127,7 @@ const settings = ref({
 })
 
 const showPreview = ref(false)
+const saving = ref(false)
 
 // 获取设置
 const loadSettings = async () => {
@@ -88,12 +142,15 @@ const loadSettings = async () => {
 
 // 保存设置
 const saveSystemSettings = async () => {
+  saving.value = true
   try {
     await saveSettings(settings.value)
     applyBackground()
     ElMessage.success('设置保存成功')
   } catch (error) {
     ElMessage.error('保存设置失败')
+  } finally {
+    saving.value = false
   }
 }
 
@@ -116,7 +173,6 @@ const applyBackground = () => {
   const { type, url } = settings.value.background
   const app = document.querySelector('#app')
   
-  // 移除现有背景
   app.style.backgroundImage = ''
   app.style.backgroundColor = ''
   
@@ -128,7 +184,6 @@ const applyBackground = () => {
     app.style.backgroundPosition = 'center'
     app.style.backgroundRepeat = 'no-repeat'
   } else if (type === 'video') {
-    // 如果已存在视频，先移除
     const existingVideo = document.querySelector('.background-video')
     if (existingVideo) {
       existingVideo.remove()
@@ -160,38 +215,145 @@ onMounted(() => {
 
 <style scoped>
 .settings-container {
-  padding: 20px;
+  height: 670px;
+  display: flex;
+  flex-direction: column;
+  background: var(--el-bg-color-page);
+  padding: 24px 24px 0;
+  border-radius: 10px;
 }
 
-.settings-card {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.card-header {
-  font-weight: bold;
-}
-
-.background-preview {
-  margin-top: 16px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.preview-header {
-  padding: 8px 16px;
-  background: var(--el-fill-color-light);
+.settings-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 24px;
+  background: var(--el-bg-color-page);
+  flex-shrink: 0;
 }
 
-.background-preview img,
-.background-preview video {
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.settings-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 24px;
+  margin-right: -8px;
+  padding-right: 8px;
+}
+
+.settings-content {
+  background: var(--el-bg-color);
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: var(--el-box-shadow-light);
+}
+
+.setting-section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.setting-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.section-header .el-icon {
+  font-size: 18px;
+  color: var(--el-color-primary);
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 4px;
+}
+
+.preview-section {
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 24px;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--el-fill-color);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.preview-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.preview-content {
+  padding: 16px;
+}
+
+.preview-content img,
+.preview-content video {
   width: 100%;
   max-height: 300px;
   object-fit: contain;
   background: #000;
+  border-radius: 4px;
+}
+
+/* 滚动条样式 */
+.settings-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-scroll::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 3px;
+}
+
+.settings-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .settings-container {
+    padding: 16px 16px 0;
+  }
+
+  .settings-content {
+    padding: 16px;
+  }
 }
 </style> 

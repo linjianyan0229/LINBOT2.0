@@ -1,6 +1,6 @@
 module.exports = {
   apps: [{
-    name: 'qq-bot',
+    name: 'lin-bot',
     script: 'index.js',
     watch: false,
     ignore_watch: [

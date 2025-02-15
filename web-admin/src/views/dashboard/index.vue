@@ -1,26 +1,56 @@
 <template>
   <div class="dashboard-container">
+    <!-- 系统状态卡片 -->
+    <el-card class="status-card">
+      <template #header>
+        <div class="card-header">
+          <span>系统状态</span>
+          <el-button 
+            type="primary" 
+            link 
+            @click="refreshStatus"
+            :loading="loading"
+          >
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+        </div>
+      </template>
+      <div class="status-content">
+        <div class="status-item">
+          <el-icon><Timer /></el-icon>
+          <div class="item-info">
+            <span class="label">运行时长</span>
+            <span class="value">{{ systemStatus.uptime }}</span>
+          </div>
+        </div>
+        <div class="status-item">
+          <el-icon><Calendar /></el-icon>
+          <div class="item-info">
+            <span class="label">启动时间</span>
+            <span class="value">{{ systemStatus.startTime }}</span>
+          </div>
+        </div>
+        <div class="status-item">
+          <el-icon><Connection /></el-icon>
+          <div class="item-info">
+            <span class="label">WebSocket</span>
+            <span class="value" :class="{ 'text-success': systemStatus.wsConnected, 'text-danger': !systemStatus.wsConnected }">
+              {{ systemStatus.wsConnected ? '已连接' : '未连接' }}
+            </span>
+          </div>
+        </div>
+        <div class="status-item">
+          <el-icon><Monitor /></el-icon>
+          <div class="item-info">
+            <span class="label">内存占用</span>
+            <span class="value">{{ formatMemory(systemStatus.memoryUsage) }}</span>
+          </div>
+        </div>
+      </div>
+    </el-card>
     <!-- 状态概览卡片 -->
     <el-row :gutter="20">
-      <el-col :span="8">
-        <el-card class="status-card">
-          <template #header>
-            <div class="card-header">
-              <span>机器人状态</span>
-            </div>
-          </template>
-          <div class="status-content">
-            <el-tag :type="isConnected ? 'success' : 'danger'" class="status-tag">
-              {{ isConnected ? '已连接' : '未连接' }}
-            </el-tag>
-            <div class="status-info">
-              <p>在线时长: {{ uptime }}</p>
-              <p>最后心跳: {{ lastHeartbeat }}</p>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
+      <el-col :span="12">
         <el-card class="status-card">
           <template #header>
             <div class="card-header">
@@ -35,7 +65,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="12">
         <el-card class="status-card">
           <template #header>
             <div class="card-header">
@@ -71,13 +101,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getPlugins, getGroups } from '@/api'
+import { getPlugins, getGroups, getSystemStatus } from '@/api'
 import api from '@/api'
-
-const isConnected = ref(true)
-const uptime = ref('0分钟')
-const lastHeartbeat = ref('--')
-let wsStartTime = null
+import { 
+  Refresh, Timer, Calendar, 
+  Connection, Monitor 
+} from '@element-plus/icons-vue'
 
 const pluginStats = ref({
   total: 0,
@@ -89,31 +118,13 @@ const groupStats = ref({
 
 const restarting = ref(false)
 
-// 更新在线时长
-const updateUptime = () => {
-  if (!wsStartTime) return
-  
-  const now = new Date()
-  const diffInSeconds = Math.floor((now - wsStartTime) / 1000)
-  
-  const days = Math.floor(diffInSeconds / 86400)
-  const hours = Math.floor((diffInSeconds % 86400) / 3600)
-  const minutes = Math.floor((diffInSeconds % 3600) / 60)
-  
-  let uptimeText = ''
-  if (days > 0) {
-    uptimeText += `${days}天`
-  }
-  if (hours > 0 || days > 0) {
-    uptimeText += `${hours}小时`
-  }
-  uptimeText += `${minutes}分钟`
-  
-  uptime.value = uptimeText
-}
-
-// 定时更新状态
-let timer = null
+const systemStatus = ref({
+  uptime: '加载中...',
+  startTime: '加载中...',
+  wsConnected: false,
+  memoryUsage: 0
+})
+const loading = ref(false)
 
 // 获取插件统计
 const getPluginStats = async () => {
@@ -155,7 +166,6 @@ const confirmRestart = async () => {
     restarting.value = true
     await api.post('/restart')
     ElMessage.success('重启指令已发送')
-    wsStartTime = new Date() // 重启后重置启动时间
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('重启失败')
@@ -165,33 +175,61 @@ const confirmRestart = async () => {
   }
 }
 
+// 格式化内存大小
+const formatMemory = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
+// 刷新系统状态
+const refreshStatus = async () => {
+  loading.value = true
+  try {
+    const response = await getSystemStatus()
+    systemStatus.value = response.data
+  } catch (error) {
+    console.error('获取系统状态失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 定时更新状态
+let timer = null
+let refreshInterval = null
+
 onMounted(() => {
   getPluginStats()
   getGroupStats()
-  wsStartTime = new Date() // 设置初始启动时间
   
-  // 启动定时器
-  timer = setInterval(() => {
-    updateUptime()
-    lastHeartbeat.value = new Date().toLocaleTimeString()
-  }, 1000)
+  refreshStatus()
+  refreshInterval = setInterval(refreshStatus, 60000) // 每分钟刷新一次
 })
 
 onUnmounted(() => {
-  // 清理定时器
-  if (timer) {
-    clearInterval(timer)
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
   }
 })
 </script>
-
-// ... template部分保持不变 ...
 
 <style scoped>
 .dashboard-container {
   max-width: 1400px;
   margin: 20px auto;
   padding: 0 20px;
+  height: 650px;
+  overflow-y: auto;
+  
+  /* 隐藏滚动条但保持可滚动 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
 }
 
 /* 卡片布局优化 */
@@ -251,7 +289,7 @@ onUnmounted(() => {
 
 /* 控制面板优化 */
 .dashboard-card {
-  margin-top: 24px;
+  margin-top: 8px;
   border-radius: 12px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
@@ -280,5 +318,63 @@ onUnmounted(() => {
   .status-card {
     margin-bottom: 16px;
   }
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  padding: 10px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.status-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--el-box-shadow-light);
+}
+
+.status-item .el-icon {
+  font-size: 24px;
+  color: var(--el-color-primary);
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+
+.value {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.text-success {
+  color: var(--el-color-success);
+}
+
+.text-danger {
+  color: var(--el-color-danger);
 }
 </style>

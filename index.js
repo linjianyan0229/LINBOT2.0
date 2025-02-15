@@ -286,6 +286,146 @@ app.post('/api/ai/settings', (req, res) => {
     }
 });
 
+// 获取插件代码
+app.get('/api/plugins/:command/code', (req, res) => {
+    const { command } = req.params;
+    try {
+        // 获取插件实例
+        const plugin = pluginManager.plugins.get(command);
+        if (!plugin) {
+            return res.status(404).json({ error: '插件不存在' });
+        }
+
+        // 获取插件文件路径
+        let pluginPath;
+        const pluginsDir = path.join(__dirname, 'plugins');
+        const items = fs.readdirSync(pluginsDir);
+        
+        // 遍历查找插件文件
+        for (const item of items) {
+            const itemPath = path.join(pluginsDir, item);
+            const stat = fs.statSync(itemPath);
+            
+            if (stat.isDirectory()) {
+                // 检查目录下的所有 js 文件
+                const files = fs.readdirSync(itemPath);
+                const jsFiles = files.filter(file => file.endsWith('.js'));
+                
+                for (const jsFile of jsFiles) {
+                    const jsPath = path.join(itemPath, jsFile);
+                    try {
+                        const Plugin = require(jsPath);
+                        const testPlugin = new Plugin();
+                        if (testPlugin.command === command) {
+                            pluginPath = jsPath;
+                            break;
+                        }
+                    } catch (error) {
+                        console.error(`检查插件文件 ${jsFile} 失败:`, error);
+                    }
+                }
+            }
+        }
+
+        if (!pluginPath) {
+            return res.status(404).json({ error: '插件文件不存在' });
+        }
+
+        const code = fs.readFileSync(pluginPath, 'utf8');
+        res.json({ code });
+    } catch (error) {
+        console.error('读取插件代码失败:', error);
+        res.status(500).json({ error: '读取插件代码失败' });
+    }
+});
+
+// 保存插件代码
+app.put('/api/plugins/:command/code', (req, res) => {
+    const { command } = req.params;
+    const { code } = req.body;
+    
+    try {
+        // 获取插件实例
+        const plugin = pluginManager.plugins.get(command);
+        if (!plugin) {
+            return res.status(404).json({ error: '插件不存在' });
+        }
+
+        // 获取插件文件路径（使用与上面相同的查找逻辑）
+        let pluginPath;
+        const pluginsDir = path.join(__dirname, 'plugins');
+        const items = fs.readdirSync(pluginsDir);
+        
+        for (const item of items) {
+            const itemPath = path.join(pluginsDir, item);
+            const stat = fs.statSync(itemPath);
+            
+            if (stat.isDirectory()) {
+                const files = fs.readdirSync(itemPath);
+                const jsFiles = files.filter(file => file.endsWith('.js'));
+                
+                for (const jsFile of jsFiles) {
+                    const jsPath = path.join(itemPath, jsFile);
+                    try {
+                        const Plugin = require(jsPath);
+                        const testPlugin = new Plugin();
+                        if (testPlugin.command === command) {
+                            pluginPath = jsPath;
+                            break;
+                        }
+                    } catch (error) {
+                        console.error(`检查插件文件 ${jsFile} 失败:`, error);
+                    }
+                }
+            }
+        }
+
+        if (!pluginPath) {
+            return res.status(404).json({ error: '插件文件不存在' });
+        }
+
+        // 创建备份
+        const backupPath = `${pluginPath}.backup`;
+        fs.copyFileSync(pluginPath, backupPath);
+        
+        // 保存新代码
+        fs.writeFileSync(pluginPath, code);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('保存插件代码失败:', error);
+        res.status(500).json({ error: '保存插件代码失败' });
+    }
+});
+
+// 获取插件分组信息
+app.get('/api/plugins/groups', (req, res) => {
+    try {
+        const groups = pluginManager.getGroups();
+        res.json(groups);
+    } catch (error) {
+        console.error('获取插件分组失败:', error);
+        res.status(500).json({ error: '获取插件分组失败' });
+    }
+});
+
+// 更新分组状态
+app.put('/api/plugins/groups/:groupName', (req, res) => {
+    const { groupName } = req.params;
+    const { enabled } = req.body;
+    
+    try {
+        const success = pluginManager.setGroupState(groupName, enabled);
+        if (success) {
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: '分组不存在' });
+        }
+    } catch (error) {
+        console.error('更新分组状态失败:', error);
+        res.status(500).json({ error: '更新分组状态失败' });
+    }
+});
+
 // WebSocket 连接处理
 wss.on('connection', (ws) => {
     console.log('新的客户端连接');
@@ -515,6 +655,39 @@ app.post('/send', (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: '发送消息失败' });
+    }
+});
+
+// 获取服务启动时间
+let startTime = new Date();
+
+// 获取系统运行信息
+app.get('/api/system/status', (req, res) => {
+    try {
+        const uptime = Math.floor((new Date() - startTime) / 1000); // 转换为秒
+        const formatUptime = (seconds) => {
+            const days = Math.floor(seconds / (3600 * 24));
+            const hours = Math.floor((seconds % (3600 * 24)) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const parts = [];
+            if (days > 0) parts.push(`${days}天`);
+            if (hours > 0) parts.push(`${hours}小时`);
+            if (minutes > 0) parts.push(`${minutes}分钟`);
+            return parts.join('') || '刚刚启动';
+        };
+
+        // 获取 PM2 进程信息
+        const pm2Status = {
+            uptime: formatUptime(uptime),
+            startTime: startTime.toLocaleString(),
+            memoryUsage: process.memoryUsage().heapUsed,
+            wsConnected: !!connectedClient,
+        };
+
+        res.json(pm2Status);
+    } catch (error) {
+        console.error('获取系统状态失败:', error);
+        res.status(500).json({ error: '获取系统状态失败' });
     }
 });
 
